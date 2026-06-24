@@ -31,6 +31,30 @@ export const experiments = [
     theory: "A fluidized bed is one in which solid particles are suspended in a fluid stream. Fluid is introduced through a distributor plate, which ensures uniform distribution of the fluid into the bed. The main components of a fluidized bed are a bed of solid particles contained within a cylindrical vessel and a distributor plate through which fluid enters the bed from below. ",
     procedure: ["Fill the water in the sump, keep the bypass valve fully open, main valves is fully closed and start the pump.", "Note down the initial bed height, diameter of the column, particle size, type of particles and their density.", "Open the main valves slowly and allow a very slow rate of water in the apparatus so as to give a small manometric deflection.", "Wait for steady state conditions and note down the flow rate of water by reading the rotameter. Note the pressure drop across the bed from the manometric reading. Also note the bed height. ","Increase the flow rate slowly and repeat the observations keeping the bed in a packed state. ", "At some flow rate the bed begins to expand and this point dote down the bed level and the flow rate. ", "Repeat he experiment for four to five readings in the fluidized bed state. ","Calculate f, Vmf and ( NRe )P and report. ","Draw the graph of ∆P/L versus Vo and ε versus Vo on ordinary graph sheets."]
   },
+  {
+    id: "venturimeter",
+    title: "Venturi Meter",
+    route: "/experiment/venturi-run",
+    aim:["1. To calibrate the given Venturi meter. ", "2. To find its coefficient of discharge. ", "3. To determine the variation of Cd with NRe"],
+    theory: "A Venturi meter is a device used to measure the flow rate of a fluid flowing through a pipe. It consists of a converging section, a throat, and a diverging section. As the fluid passes through the throat, its velocity increases and pressure decreases. The pressure difference between the inlet and throat is measured using a U-tube manometer and is used to determine the flow rate and coefficient of discharge. ",
+    procedure: ["Keep the bypass valve fully open, close all other valves, and start the motor.","Allow water to flow through the Venturi meter and regulate the flow using the ball valve.","Remove any air bubbles from the manometer and record the manometer reading after steady flow is achieved.","Measure the time taken for the water level in the collecting tank to rise by a known height.","Repeat the experiment for different flow rates by adjusting the ball valve and bypass valve.","Calculate the discharge and coefficient of discharge, then report the results."]
+  },
+  {
+    id: "orificemeter",
+    title: "Orifice Meter",
+    route: "/experiment/orifice-run",
+    aim:["1. To calibrate the given Orifice meter. ", "2. To find its coefficient of discharge. ", "3. To determine the variation of Co with NRe"],
+    theory: "An Orifice meter is a flow measurement device that uses a thin plate with a circular opening inserted in a pipe. As fluid flows through the orifice, its velocity increases and pressure decreases, creating a measurable pressure difference. This pressure drop is measured using a U-tube manometer and is used to determine the flow rate and coefficient of discharge. ",
+    procedure: [ "Keep the bypass valve fully open, close all other valves, and start the motor.","Allow water to flow through the orifice meter and regulate the flow using the ball valve.","Remove any air bubbles from the manometer and record the manometer reading after steady flow is achieved.","Measure the time taken for the water level in the collecting tank to rise by a known height.","Repeat the experiment for different flow rates by adjusting the ball valve and bypass valve.","Calculate the discharge and coefficient of discharge, then report the results."]
+  },
+  {
+    id: "centrifugalpump",
+    title: "Centrifugal Pump",
+    route: "/experiment/centrifugalpump-run",
+    aim:"To study the behavior of a Centrifugal Pump & plot the operating curve.",
+    theory: "A centrifugal pump transfers mechanical energy from a rotating impeller to a liquid, increasing its velocity and pressure. The liquid is forced outward by centrifugal action and delivered at a higher pressure. The performance of the pump is evaluated by studying the relationship between discharge, head, power consumption, and efficiency. ",
+    procedure: ["Connect the power supply, open the suction and delivery valves, and fill the sump with water.","Air vent the pump and set the desired speed using the pulley arrangement.","Switch on the pump and allow water to flow into the measuring tank.","Record the pressure gauge, vacuum gauge, and energy meter readings at full valve opening.","Adjust the butterfly valve and measure the collecting tank height and corresponding time.","Repeat the experiment for different valve positions and record all observations.","Calculate the discharge, head, power, and efficiency of the pump, then report the results."]
+  },
 ];  
 
 export default experiments;

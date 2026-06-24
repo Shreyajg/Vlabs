@@ -11,8 +11,8 @@ export default function Home() {
       {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>Fluid Dynamics</Text>
-          <Text style={styles.subtitle}>Laboratory Manual</Text>
+          <Text style={styles.title}>Fluid Mechanics</Text>
+          <Text style={styles.subtitle}>Labs made easier!</Text>
         </View>
 
         <Image
