@@ -2,7 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { Link } from "expo-router";
 import React from "react";
+import { getExperiment } from "@/services/experimentService";
 import Svg, { Line, Circle, Polyline, Text as SvgText } from "react-native-svg";
+import { evaluate } from "mathjs";
 import {
   ScrollView,
   StyleSheet,
@@ -23,33 +25,23 @@ type Run = {
 
 type Result = {
   run: number;
-  deltaP: number;
-  Q: number;
-  V: number;
-  NRe: number;
-  f: number;
+  [key: string]: number;
 };
 
 export default function PipeFlow() {
+  const [experiment, setExperiment] = React.useState<any>(null);
+
   // INPUT STATES
-  const [diameter, setDiameter] = React.useState<string>("");
-  const [length, setLength] = React.useState<string>("");
-  const [area, setArea] = React.useState<string>("");
-  const [density, setDensity] = React.useState<string>("");
-  const [viscosity, setViscosity] = React.useState<string>("");
+  const [inputs, setInputs] = React.useState<Record<string, string>>({});
 
   // UNIT STATES
-  const [diameterUnit, setDiameterUnit] = React.useState<string>("m");
-  const [lengthUnit, setLengthUnit] = React.useState<string>("m");
-  const [areaUnit, setAreaUnit] = React.useState<string>("m²");
-  const [densityUnit, setDensityUnit] = React.useState<string>("kg/m³");
-  const [viscosityUnit, setViscosityUnit] = React.useState<string>("kg/m·s");
+  const [units, setUnits] = React.useState<Record<string, string>>({});
 
   // RUN DATA
   const [runs, setRuns] = React.useState<Run[]>([
     { lhs: "", rhs: "", height: "", time: "" },
   ]);
-
+  
   const addRun = () => {
     setRuns([...runs, { lhs: "", rhs: "", height: "", time: "" }]);
   };
@@ -65,70 +57,120 @@ export default function PipeFlow() {
   };
 
   const [results, setResults] = React.useState<Result[]>([]);
-
-  // UNIT CONVERSIONS
-  const convertUnitToM = (unit: string, val: number): number => {
-    if (unit === "cm") return val / 100;
-    if (unit === "mm") return val / 1000;
-    if (unit === "inch") return val * 0.0254;
-    if (unit === "ft") return val * 0.3048;
-    return val;
-  };
-
-  const convertUnitToMsq = (unit: string, val: number): number => {
-    if (unit === "cm²") return val / 10000;
-    if (unit === "ft²") return val * 0.3048 * 0.3048;
-    return val;
-  };
-
-  // CALCULATION
-  const calculate = () => {
-    let D = Number(diameter);
-    let L = Number(length);
-    let A = Number(area);
-    let Den = Number(density);
-    let Vis = Number(viscosity);
-
-    if (diameterUnit !== "m") D = convertUnitToM(diameterUnit, D);
-    if (lengthUnit !== "m") L = convertUnitToM(lengthUnit, L);
-    if (areaUnit !== "m²") A = convertUnitToMsq(areaUnit, A);
-
-    if (densityUnit !== "kg/m³") Den *= 1000;
-    if (viscosityUnit !== "kg/m·s") Vis *= 0.001;
-
-    const g = 9.81;
-    const rho = 13600;
-
-    let temp: Result[] = [];
-
-    for (let i = 0; i < runs.length; i++) {
-      if (Number(runs[i].time) === 0) continue;
-
-      let Rm =
-        Math.abs(Number(runs[i].lhs) - Number(runs[i].rhs)) / 100;
-
-      let deltaP = Rm * (rho - Den) * g;
-      let Q = (A * Number(runs[i].height)) / Number(runs[i].time);
-      let V = Q / ((3.14 * D * D) / 4);
-      let NRe = (D * V * Den) / Vis;
-
-      let f = 0;
-      if (V !== 0) {
-        f = (deltaP * D) / (2 * Den * L * V * V);
+  React.useEffect(() => {
+      async function loadExperiment() {
+        const data = await getExperiment("fluid-mechanics", "pipeflow");
+        setExperiment(data);
       }
 
-      temp.push({
+      loadExperiment();
+    }, []);
+    
+  if (!experiment) {
+  return <Text>Loading...</Text>;
+}
+console.log("EXPERIMENT:", experiment);
+console.log("INPUTS:", experiment.inputFields);
+console.log("RUN INPUTS:", experiment.runInputs);
+console.log("OUTPUTS:", experiment.outputs);
+console.log("GRAPH:", experiment.graph);
+
+  //Unit conversion
+  const convertToSI = (
+    value: number,
+    unit: string
+  ): number => {
+    const conversions: Record<string, number> = {
+      m: 1,
+      cm: 0.01,
+      mm: 0.001,
+      inch: 0.0254,
+      ft: 0.3048,
+
+      "m²": 1,
+      "cm²": 0.0001,
+      "ft²": 0.092903,
+
+      "kg/m³": 1,
+      "g/cm³": 1000,
+
+      "Pa·s": 1,
+      cP: 0.001,
+    };
+
+    return value * (conversions[unit] ?? 1);
+  };
+  // CALCULATION
+  const calculate = () => {
+  try {
+    if (!experiment) return;
+
+    console.log("EXPERIMENT:", experiment);
+    console.log("inputs:", experiment.inputs);
+    console.log("runInputs:", experiment.runInputs);
+    console.log("constants:", experiment.constants);
+    console.log("formulas:", experiment.formulas);
+    console.log("outputs:", experiment.outputs);
+
+    const calculatedResults: Result[] = [];
+
+    for (let i = 0; i < runs.length; i++) {
+      const scope: Record<string, number> = {};
+
+      console.log("STEP 1 - inputs");
+
+      for (const input of experiment.inputFields ?? []) {
+        const value = Number(inputs[input.key]);
+        const unit = units[input.key] || input.defaultUnit;
+
+        scope[input.key] = convertToSI(value, unit);
+      }
+
+      console.log("STEP 2 - run inputs");
+
+      for (const runInput of experiment.runInputs ?? []) {
+        scope[runInput.key] = Number(
+          runs[i][runInput.key as keyof Run]
+        );
+      }
+
+      console.log("STEP 3 - constants");
+
+      if (experiment.constants) {
+        for (const constant of experiment.constants ?? []) {
+          scope[constant.key] = Number(constant.value);
+        }
+      }
+
+      console.log("STEP 4 - formulas", scope);
+
+      for (const formula of experiment.formulas ?? []) {
+        console.log("EVALUATING:", formula);
+
+        const value = evaluate(formula.expression, scope);
+
+        scope[formula.key] = Number(value);
+      }
+
+      console.log("STEP 5 - outputs");
+
+      const result: Result = {
         run: i + 1,
-        deltaP,
-        Q,
-        V,
-        NRe,
-        f,
-      });
+      };
+
+      for (const output of experiment.outputs ?? []) {
+        result[output.key] = scope[output.key];
+      }
+
+      calculatedResults.push(result);
     }
 
-    setResults(temp);
-  };
+    setResults(calculatedResults);
+
+  } catch (error) {
+    console.error("CALCULATE ERROR:", error);
+  }
+};
 
   // REGIME FUNCTION (FIXED TYPES)
   const findRegime = (min: number, max: number): string => {
@@ -155,33 +197,68 @@ export default function PipeFlow() {
       <View style={styles.header}>
         <Link href="/" style={styles.backButton}>
           <Ionicons name="chevron-back" size={22} />
-          <Text style={styles.headerTitle}>Pipe Flow Calculator</Text>
+          <Text style={styles.headerTitle}>{experiment.title}</Text>
         </Link>
       </View>
 
       {/* INPUTS */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Constants</Text>
+      <Text style={styles.cardTitle}>Constants</Text>
 
-        <TextInput style={styles.input} placeholder="Diameter" onChangeText={setDiameter} />
-        <TextInput style={styles.input} placeholder="Length" onChangeText={setLength} />
-        <TextInput style={styles.input} placeholder="Area" onChangeText={setArea} />
-        <TextInput style={styles.input} placeholder="Density" onChangeText={setDensity} />
-        <TextInput style={styles.input} placeholder="Viscosity" onChangeText={setViscosity} />
-      </View>
+      {experiment.inputFields.map((input: any) => (
+        <View key={input.key} style={{ marginBottom: 12 }}>
+          <TextInput
+            style={styles.input}
+            placeholder={input.label}
+            value={inputs[input.key] || ""}
+            onChangeText={(value) =>
+              setInputs((prev) => ({
+                ...prev,
+                [input.key]: value,
+              }))
+            }
+          />
+
+          <Picker
+            selectedValue={units[input.key] || input.units[0]}
+            onValueChange={(value) =>
+              setUnits((prev) => ({
+                ...prev,
+                [input.key]: value,
+              }))
+            }
+          >
+            {input.units.map((unit: string) => (
+              <Picker.Item
+                key={unit}
+                label={unit}
+                value={unit}
+              />
+            ))}
+          </Picker>
+        </View>
+      ))}
+    </View>
 
       {/* RUN DATA */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Run Data</Text>
 
         {runs.map((run, i) => (
-          <View key={i}>
-            <TextInput style={styles.input} placeholder="LHS" onChangeText={(v) => updateRun(i, "lhs", v)} />
-            <TextInput style={styles.input} placeholder="RHS" onChangeText={(v) => updateRun(i, "rhs", v)} />
-            <TextInput style={styles.input} placeholder="Height" onChangeText={(v) => updateRun(i, "height", v)} />
-            <TextInput style={styles.input} placeholder="Time" onChangeText={(v) => updateRun(i, "time", v)} />
-          </View>
-        ))}
+        <View key={i}>
+          {experiment.runInputs.map((field: any) => (
+            <TextInput
+              key={field.key}
+              style={styles.input}
+              placeholder={field.label}
+              value={run[field.key as keyof Run]}
+              onChangeText={(value) =>
+                updateRun(i, field.key as keyof Run, value)
+              }
+            />
+          ))}
+        </View>
+      ))}
 
         <TouchableOpacity style={styles.addButton} onPress={addRun}>
           <Text style={styles.addButtonText}>Add Run</Text>
@@ -208,20 +285,25 @@ export default function PipeFlow() {
   const logMin = (arr) => Math.log10(Math.min(...arr));
   const logMax = (arr) => Math.log10(Math.max(...arr));
 
-  const reValues = results.map(r => r.NRe);
-  const fValues = results.map(r => r.f);
+  const xKey = experiment.graph.xKey as keyof Result;
+  const yKey = experiment.graph.yKey as keyof Result;
 
-  const xMin = logMin(reValues) - 0.2;
-  const xMax = logMax(reValues) + 0.2;
-  const yMin = logMin(fValues) - 0.2;
-  const yMax = logMax(fValues) + 0.2;
+  const xValues = results.map(r => Number(r[xKey]));
+  const yValues = results.map(r => Number(r[yKey]));
+
+  const xMin = logMin(xValues) - 0.2;
+  const xMax = logMax(xValues) + 0.2;
+  const yMin = logMin(yValues) - 0.2;
+  const yMax = logMax(yValues) + 0.2;
 
   const toX = (val) => ((Math.log10(val) - xMin) / (xMax - xMin)) * innerW;
   const toY = (val) => innerH - ((Math.log10(val) - yMin) / (yMax - yMin)) * innerH;
 
   // Sort by NRe for line
-  const sorted = [...results].sort((a, b) => a.NRe - b.NRe);
-  const points = sorted.map(r => `${toX(r.NRe)},${toY(r.f)}`).join(" ");
+  const sorted = [...results].sort(
+    (a, b) => Number(a[xKey]) - Number(b[xKey])
+  );
+  const points = sorted.map(r => `${toX(Number(r[xKey]))},${toY(Number(r[yKey]))}`).join(" ");
 
   // Tick labels
   const reRange = Math.ceil(xMax) - Math.floor(xMin);
@@ -231,7 +313,10 @@ export default function PipeFlow() {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Graph: f vs N_Re (Log–Log)</Text>
+      <Text style={styles.cardTitle}>
+        Graph: {experiment.graph.title}
+        {experiment.graph.scale === "log" ? " (Log–Log)" : ""}
+      </Text>
       <Svg width={W} height={H}>
         {/* Y grid + ticks */}
         {yTicks.map(tick => (
@@ -270,8 +355,17 @@ export default function PipeFlow() {
         {/* Trend line */}
         {sorted.length > 1 && (
           <Polyline
-            points={sorted.map(r => `${padding.left + toX(r.NRe)},${padding.top + toY(r.f)}`).join(" ")}
-            fill="none" stroke="#2563EB" strokeWidth={1.5}
+            points={sorted
+              .map(
+                r =>
+                  `${padding.left + toX(Number(r[xKey]))},${
+                    padding.top + toY(Number(r[yKey]))
+                  }`
+              )
+              .join(" ")}
+            fill="none"
+            stroke="#2563EB"
+            strokeWidth={1.5}
           />
         )}
 
@@ -279,15 +373,16 @@ export default function PipeFlow() {
         {results.map((r, i) => (
           <Circle
             key={i}
-            cx={padding.left + toX(r.NRe)}
-            cy={padding.top + toY(r.f)}
-            r={4} fill="#2563EB"
+            cx={padding.left + toX(Number(r[xKey]))}
+            cy={padding.top + toY(Number(r[yKey]))}
+            r={4}
+            fill="#2563EB"
           />
         ))}
 
         {/* Axis labels */}
         <SvgText x={padding.left + innerW / 2} y={H - 2} fontSize={11} textAnchor="middle" fill="#374151">
-          N_Re
+          {experiment.graph.xLabel}
         </SvgText>
         {/* Y-axis label - fix position */}
 <SvgText
@@ -298,7 +393,7 @@ export default function PipeFlow() {
   fill="#374151"
   transform={`rotate(-90, 10, ${padding.top + innerH / 2})`}
 >
-  f
+  {experiment.graph.yLabel}
 </SvgText>
       </Svg>
     </View>
@@ -311,13 +406,17 @@ export default function PipeFlow() {
         <Text style={styles.cardTitle}>Results</Text>
 
         {results.map((r) => (
-          <View key={r.run}>
-            <Text>Run {r.run}</Text>
-            <Text>ΔP: {r.deltaP.toFixed(2)}</Text>
-            <Text>Re: {r.NRe.toFixed(0)}</Text>
-            <Text>f: {r.f.toFixed(4)}</Text>
-          </View>
-        ))}
+        <View key={r.run}>
+          <Text>Run {r.run}</Text>
+
+          {experiment.outputs.map((output: any) => (
+            <Text key={output.key}>
+              {output.label}:{" "}
+              {Number(r[output.key as keyof Result]).toFixed(output.decimals)}
+            </Text>
+          ))}
+        </View>
+      ))}
 
         <Text>{getInference(results)}</Text>
       </View>

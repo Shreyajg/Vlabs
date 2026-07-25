@@ -30,14 +30,89 @@ type Result = {
 };
 
 export default function FluidizedBedRun() {
+  // unit changes:
+  const convertLength = (value: number, unit: string) => {
+  switch (unit) {
+    case "cm":
+      return value / 100;
+    case "mm":
+      return value / 1000;
+    default:
+      return value;
+  }
+};
 
+const convertDensity = (value: number, unit: string) => {
+  switch (unit) {
+    case "g/cm³":
+      return value * 1000;
+    default:
+      return value;
+  }
+};
+
+const convertViscosity = (value: number, unit: string) => {
+  switch (unit) {
+    case "cP":
+      return value / 1000;
+    default:
+      return value;
+  }
+};
+
+const convertFlow = (value: number, unit: string) => {
+  switch (unit) {
+    case "m³/s":
+      return value;
+    case "LPM":
+      return value * 1e-3 / 60;
+    case "LPH":
+      return value * 1e-3 / 3600;
+    default:
+      return value;
+  }
+};
+const InputWithUnit = ({
+  value,
+  onChangeText,
+  placeholder,
+  unit,
+  setUnit,
+  units,
+}: any) => (
+  <View style={styles.inputGroup}>
+    <View style={styles.inputRow}>
+      <TextInput
+        style={styles.input}
+        value={value}
+        placeholder={placeholder}
+        keyboardType="numeric"
+        onChangeText={onChangeText}
+      />
+
+      <Picker
+        selectedValue={unit}
+        style={styles.unitPicker}
+        onValueChange={setUnit}
+      >
+        {units.map((u: string) => (
+          <Picker.Item key={u} label={u} value={u} />
+        ))}
+      </Picker>
+    </View>
+  </View>
+);
   // CONSTANT INPUTS
   const [diameter, setDiameter] = React.useState<string>("");
   const [initialHeight, setInitialHeight] = React.useState<string>("");
   const [area, setArea] = React.useState<string>("");
   const [density, setDensity] = React.useState<string>("1000");
   const [viscosity, setViscosity] = React.useState<string>("0.001");
-
+  const [diameterUnit, setDiameterUnit] = React.useState("m");
+  const [heightUnit, setHeightUnit] = React.useState("m");
+  const [densityUnit, setDensityUnit] = React.useState("kg/m3");
+  const [viscosityUnit, setViscosityUnit] = React.useState("Pa.s");
+  const [flowUnit, setFlowUnit] = React.useState("LPM");
   const [results, setResults] = React.useState<Result[]>([]);
 
   const [runs, setRuns] = React.useState<Run[]>([
@@ -63,9 +138,9 @@ export default function FluidizedBedRun() {
     const g = 9.81;
     const rho_m = 1600; // given
 
-    const D = Number(diameter);
+    const D = convertLength(Number(diameter), diameterUnit);
     const A = (Math.PI * D * D) / 4;
-    const L0 = Number(initialHeight);
+    const L0 = convertLength(Number(initialHeight), heightUnit);
     const epsilon0 = 125e-6 / (A * L0);
 
     let temp: Result[] = [];
@@ -73,8 +148,8 @@ export default function FluidizedBedRun() {
     for (let i = 0; i < runs.length; i++) {
       const lhs = Number(runs[i].lhs);
       const rhs = Number(runs[i].rhs);
-      const L = Number(runs[i].bedHeight);
-      const flow = Number(runs[i].flow);
+      const L = convertLength(Number(runs[i].bedHeight), heightUnit);
+      const flow = convertFlow(Number(runs[i].flow),flowUnit);
 
       if (flow === 0 || L === 0) continue;
 
@@ -117,10 +192,40 @@ temp.push({ run: i+1, Rm, Vo, epsilon, deltaPL, f, NRe });
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Constants</Text>
 
-        <TextInput placeholder="Column Diameter (m)" style={styles.input} onChangeText={setDiameter} />
-        <TextInput placeholder="Initial Bed Height (Lo)" style={styles.input} onChangeText={setInitialHeight} />
-        <TextInput placeholder="Density" style={styles.input} onChangeText={setDensity} />
-        <TextInput placeholder="Viscosity" style={styles.input} onChangeText={setViscosity} />
+        <InputWithUnit
+        value={diameter}
+        onChangeText={setDiameter}
+        placeholder="Column Diameter"
+        unit={diameterUnit}
+        setUnit={setDiameterUnit}
+        units={["m", "cm", "mm"]}
+      />
+        <InputWithUnit
+        value={initialHeight}
+        onChangeText={setInitialHeight}
+        placeholder="Initial Bed Height"
+        unit={heightUnit}
+        setUnit={setHeightUnit}
+        units={["m", "cm", "mm"]}
+      />
+
+      <InputWithUnit
+        value={density}
+        onChangeText={setDensity}
+        placeholder="Density"
+        unit={densityUnit}
+        setUnit={setDensityUnit}
+        units={["kg/m³", "g/cm³"]}
+      />
+
+      <InputWithUnit
+        value={viscosity}
+        onChangeText={setViscosity}
+        placeholder="Viscosity"
+        unit={viscosityUnit}
+        setUnit={setViscosityUnit}
+        units={["Pa·s", "cP"]}
+      />
       </View>
 
       {/* RUN DATA */}
