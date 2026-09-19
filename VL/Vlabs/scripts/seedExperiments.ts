@@ -1,5 +1,5 @@
-import { experiments } from "../constants/experiments.ts";
-import { uploadExperiment } from "../services/experimentService.ts";
+import { experiments } from "../constants/experiments";
+import { uploadExperiment } from "../services/experimentService";
 
 export async function seedExperiments() {
   try {

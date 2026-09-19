@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { VictoryChart, VictoryLine, VictoryAxis } from "victory-native";
-
+import { useLocalSearchParams } from "expo-router";
 // TYPES
 type Run = {
   lhs: string;
@@ -57,14 +57,16 @@ export default function PipeFlow() {
   };
 
   const [results, setResults] = React.useState<Result[]>([]);
+  const { id } = useLocalSearchParams();
   React.useEffect(() => {
       async function loadExperiment() {
-        const data = await getExperiment("fluid-mechanics", "pipeflow");
+        if (!id || Array.isArray(id)) return;
+        const data = await getExperiment("fluid-mechanics",id);
         setExperiment(data);
       }
 
       loadExperiment();
-    }, []);
+    }, [id]);
     
   if (!experiment) {
   return <Text>Loading...</Text>;
