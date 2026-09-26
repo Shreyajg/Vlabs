@@ -1,0 +1,164 @@
+// Firestore Security Rules for VLabs.  STATUS: READY FOR REVIEW, NOT DEPLOYED.
+//
+// These rules are the security boundary. Route guards and hidden buttons in the app are only UX;
+// a modified client can call Firestore directly, so everything the app relies on is enforced here.
+//
+// Roles live in users/{uid}.role ("student" | "faculty"). Public registration can only create
+// "student"; faculty profiles are provisioned by an admin in the Firebase Console (Console writes
+// bypass these rules). A signed-in user with no profile, or with an unknown role, is granted nothing.
+//
+// Paths in use (verified against the code):
+//   users/{uid}                                     profile          (services/authService.ts)
+//   subjects/{subjectId}                            read-only        (services/subjectService.ts)
+//   subjects/{subjectId}/experiments/{experimentId} experiments      (services/experimentService.ts)
+//   experimentRuns/{runId}                          saved runs       (services/experimentRunService.ts)
+//
+// Not granted yet (Phase 5/6 reports): faculty reading student profiles or every student's runs.
+// Add that here, deliberately, when Reports read real data.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // exists() guards get(): a missing profile makes every role check false instead of an error,
+    // so it can never accidentally grant access.
+    function hasProfile() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function roleOfCaller() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '');
+    }
+
+    function isStudent() {
+      return hasProfile() && roleOfCaller() == 'student';
+    }
+
+    function isFaculty() {
+      return hasProfile() && roleOfCaller() == 'faculty';
+    }
+
+    // Same limits the app enforces in services/auth/authValidation.ts.
+    function isName(value) {
+      return value is string && value.size() > 0 && value.size() <= 80;
+    }
+
+    function isAcademicText(value) {
+      return value is string && value.size() <= 100;
+    }
+
+    // ---------- users/{uid} ----------
+
+    match /users/{uid} {
+      // Own profile only. There is no "list": nobody can enumerate users.
+      allow get: if isOwner(uid)
+        || (isFaculty() && resource.data.role == 'student');
+      allow list: if isFaculty()
+        && resource.data.role == 'student';
+      // A new profile is always a student's, for the caller's own uid, with exactly the fields the
+      // app writes. This is what stops a client from creating itself as faculty.
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(
+          ['uid', 'name', 'email', 'role', 'university', 'program', 'branch', 'createdAt'])
+        && request.resource.data.keys().hasAll(
+          ['uid', 'name', 'email', 'role', 'university', 'program', 'branch', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'student'
+        && request.resource.data.email is string
+        && 'email' in request.auth.token
+        && request.resource.data.email.lower() == request.auth.token.email.lower()
+        && isName(request.resource.data.name)
+        && isAcademicText(request.resource.data.university)
+        && isAcademicText(request.resource.data.program)
+        && isAcademicText(request.resource.data.branch)
+        && request.resource.data.createdAt == request.time;
+
+      // Only the fields the edit screens offer can change: a student's name, university, program and
+      // branch, or a faculty member's name, university (the institution) and department. uid, email,
+      // role and createdAt are immutable, and no other field can be added, because any other key
+      // makes affectedKeys() larger than this list.
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'university', 'program', 'branch', 'department'])
+        && isName(request.resource.data.get('name', ''))
+        && isAcademicText(request.resource.data.get('university', ''))
+        && isAcademicText(request.resource.data.get('program', ''))
+        && isAcademicText(request.resource.data.get('branch', ''))
+        && isAcademicText(request.resource.data.get('department', ''));
+
+      // No supported flow deletes a profile from the client.
+      allow delete: if false;
+    }
+
+    // ---------- subjects and experiments ----------
+
+    match /subjects/{subjectId} {
+      // Subjects are provisioned in the Console; no client writes them.
+      allow read: if isStudent() || isFaculty();
+      allow write: if false;
+
+      match /experiments/{experimentId} {
+        // Faculty see everything. Students see published experiments only. Rules are not filters:
+        // a student's list query must itself say where('isPublished', '==', true).
+        allow read: if isFaculty()
+          || (isStudent() && resource.data.isPublished == true);
+
+        // Publishing and unpublishing is an update of isPublished, so it is faculty-only too.
+        // isPublished must stay a boolean because it is the gate students are held to.
+        allow create, update: if isFaculty()
+          && request.resource.data.isPublished is bool;
+
+        // The Faculty UI has create, edit and publish, but no delete.
+        allow delete: if false;
+      }
+    }
+
+    // ---------- experimentRuns/{runId} ----------
+    // The owner field is studentId. Saved runs are frozen: the app never updates or deletes one,
+    // so neither is allowed. That also makes ownership impossible to change after creation.
+
+    match /experimentRuns/{runId} {
+      allow read: if isFaculty()
+      || (isSignedIn() && resource.data.studentId == request.auth.uid);
+
+      allow create: if isStudent()
+        && request.resource.data.keys().hasOnly(
+          ['studentId', 'subjectId', 'experimentId', 'inputs', 'runValues', 'results',
+           'graphData', 'status', 'startedAt', 'completedAt'])
+        && request.resource.data.keys().hasAll(
+          ['studentId', 'subjectId', 'experimentId', 'inputs', 'runValues', 'results',
+           'graphData', 'status', 'startedAt', 'completedAt'])
+        && request.resource.data.studentId == request.auth.uid
+        && request.resource.data.subjectId is string
+        && request.resource.data.subjectId.size() > 0
+        && request.resource.data.experimentId is string
+        && request.resource.data.experimentId.size() > 0
+        && request.resource.data.inputs is map
+        && request.resource.data.runValues is map
+        && request.resource.data.results is map
+        && request.resource.data.graphData is list
+        && request.resource.data.status == 'completed'
+        && request.resource.data.startedAt is timestamp
+        && request.resource.data.completedAt == request.time;
+
+      allow update, delete: if false;
+    }
+
+    // Anything not matched above is denied. (Denied is already the default; this makes it explicit.)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

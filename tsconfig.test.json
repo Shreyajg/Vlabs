@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "customConditions": null,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "rootDir": ".",
+    "outDir": "node_modules/.cache/vlabs-tests",
+    "types": ["node"],
+    "jsx": "preserve",
+    "allowImportingTsExtensions": false,
+    "paths": {
+      "mathjs/number": ["./node_modules/mathjs/types/index.d.ts"]
+    }
+  },
+  "include": [
+    "types/**/*.ts",
+    "services/normalizeExperiment.ts",
+    "services/experimentDetail.ts",
+    "services/experimentAuthoring.ts",
+    "services/reportService.ts",
+    "services/subjectSearch.ts",
+    "services/__tests__/**/*.ts",
+    "services/calculation/**/*.ts",
+    "services/auth/**/*.ts",
+    "constants/experiments.ts"
+  ],
+  "exclude": ["node_modules"]
+}
